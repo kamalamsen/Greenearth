@@ -5,7 +5,7 @@ from huggingface_hub import hf_hub_download
 import base64
 
 # --- Constants ---
-MAX_SCORE = 30
+MAX_SCORE = 9
 HF_REPO = "senkamalam/reward"
 INITIAL_SCORE = 0
 
