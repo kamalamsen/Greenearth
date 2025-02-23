@@ -1,6 +1,8 @@
 import streamlit as st
 from huggingface_hub import hf_hub_download
+from transformers import pipeline  # 👈 Added missing import
 import base64
+import torch
 
 # --- Constants ---
 MAX_SCORE = 9  # 3 categories × max 3 points each
@@ -136,14 +138,19 @@ def main():
         st.error(f"⚠️ Error calculating scores: Invalid input detected")
         st.stop()
 
-    # Eco Tips Section
+    # Eco Tips Section (Fixed)
     st.divider()
     if st.button("💡 Get Personalized Eco Tips"):
         try:
-            generator = pipeline("text-generation", model="gpt2")
-            prompt = f"Give 3 practical tips for someone using {transport}, eating meat {diet}, using {energy}:"
+            # Initialize pipeline with explicit model
+            generator = pipeline(
+                "text-generation",
+                model="gpt2",
+                torch_dtype=torch.bfloat16
+            )
+            prompt = f"Give 3 practical eco tips for someone using {transport}, eating meat {diet}, using {energy}:"
             response = generator(prompt, max_length=200)[0]['generated_text']
-            st.success(f"**Your Eco Plan:**\n\n{response.split(':')[-1]}")
+            st.success(f"**Your Eco Plan:**\n\n{response.split(':')[-1].strip()}")
             play_sound("success")
         except Exception as e:
             st.warning(f"⚠️ AI system busy - try again later! Error: {str(e)}")
