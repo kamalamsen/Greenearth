@@ -5,117 +5,102 @@ from huggingface_hub import hf_hub_download
 import base64
 
 # --- Constants ---
-MAX_SCORE = 9
+MAX_SCORE = 9  # 3 categories × max 3 points each
 HF_REPO = "senkamalam/reward"
-INITIAL_SCORE = 0
+
+# --- Scoring System Explanation ---
+SCORING_LOGIC = """
+### 🧮 How Scoring Works:
+- **Transportation**:  
+  🚗 Car (1pt) → 🚌 Bus/Train (2pts) → 🚲 Bike/Walk (3pts)  
+- **Diet**:  
+  🥩 Daily Meat (1pt) → 🐟 Weekly (2pts) → 🌱 Vegetarian (3pts)  
+- **Energy**:  
+  🔌 Regular Power (1pt) → 🌤️ Some Green (2pts) → 💨 All Renewable (3pts)  
+
+**Maximum Possible Score: 9** (3pts × 3 categories)
+"""
 
 # --- Initialize Session State ---
 if 'score' not in st.session_state:
-    st.session_state.score = INITIAL_SCORE
+    st.session_state.score = 0
 
 # --- Audio Reward System ---
 def play_sound(sound_type: str):
-    """Play audio from your Hugging Face Space"""
-    try:
-        # Download from your HF Space
-        audio_file = hf_hub_download(
-            repo_id=HF_REPO,
-            filename=f"{sound_type}.mp3",
-            repo_type="space"
-        )
-        
-        # Create hidden audio player
-        with open(audio_file, "rb") as f:
-            audio_data = f.read()
-            b64 = base64.b64encode(audio_data).decode()
-            audio_html = f"""
-            <audio controls autoplay style="display:none">
-                <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-            </audio>
-            """
-            st.markdown(audio_html, unsafe_allow_html=True)
-            
-    except Exception as e:
-        st.warning(f"🔇 Sound system: {str(e)}")
+    """Play audio feedback"""
+    # ... (keep existing audio code) ...
 
 # --- Score Calculation ---
 def calculate_score(transport, diet, energy):
-    """Simple scoring system"""
+    """Clearer scoring system with better points distribution"""
     score_map = {
-        "Car": 4, "Bus/Train": 2, "Bike/Walk": 1,
-        "Daily": 4, "Weekly": 3, "Sometimes": 2, "Never": 1,
-        "Regular Power": 3, "Some Green Energy": 2, "All Renewable": 1
+        # Transportation (more eco-friendly = higher points)
+        "Car": 1, "Bus/Train": 2, "Bike/Walk": 3,
+        # Diet (less meat = higher points)
+        "Daily": 1, "Weekly": 2, "Sometimes": 3, "Never": 3,
+        # Energy (greener = higher points)
+        "Regular Power": 1, "Some Green Energy": 2, "All Renewable": 3
     }
-    return (
-        score_map[transport] + 
-        score_map[diet] + 
-        score_map[energy]
-    )
+    return score_map[transport] + score_map[diet] + score_map[energy]
 
 # --- Main App ---
 def main():
     st.title("🌍 EcoGame Pro")
     st.markdown("### Track & Improve Your Environmental Impact")
     
+    # Show scoring explanation first
+    with st.expander("📊 HOW SCORING WORKS", expanded=True):
+        st.markdown(SCORING_LOGIC)
+    
     # --- User Inputs ---
-    with st.expander("📝 Your Habits", expanded=True):
+    with st.expander("📝 YOUR HABITS", expanded=True):
         transport = st.selectbox(
             "Main Transportation:",
             ["Car", "Bus/Train", "Bike/Walk"],
-            index=0
+            index=0,
+            help="More eco-friendly choices give higher points!"
         )
         
         diet = st.select_slider(
             "Meat Consumption:",
             options=["Daily", "Weekly", "Sometimes", "Never"],
-            value="Daily"
+            value="Daily",
+            help="Less meat consumption = higher score"
         )
         
         energy = st.radio(
             "Energy Source:",
             ["Regular Power", "Some Green Energy", "All Renewable"],
-            index=0
+            index=0,
+            help="Greener energy sources boost your score"
         )
     
-    # --- Calculate Score ---
+    # --- Calculate & Display Score ---
     current_score = calculate_score(transport, diet, energy)
-    st.session_state.score += current_score
+    progress_value = current_score/MAX_SCORE
     
-    # --- Progress System ---
-    progress_value = min(st.session_state.score/MAX_SCORE, 1.0)
-    st.progress(progress_value)
-    st.subheader(f"🏆 Current Score: {st.session_state.score}/{MAX_SCORE}")
-    
-    # --- Rewards ---
-    if st.button("🎮 Get Eco Tips"):
-        try:
-            # AI Recommendations
-            generator = pipeline("text-generation", model="gpt2")
-            prompt = f"Give 3 simple tips to improve sustainability for someone using {transport}, eating meat {diet}, using {energy} energy:"
-            response = generator(prompt, max_length=200)[0]['generated_text']
-            st.success(f"**Your Eco Plan:**\n\n{response.split(':')[-1]}")
-            play_sound("success")
-            
-        except Exception as e:
-            st.warning(f"AI system busy - try again later! {str(e)}")
-    
-    # --- Challenges ---
-    st.header("🚀 Daily Challenges")
-    challenges = [
-        {"name": "🚌 Public Transport Day", "points": 2},
-        {"name": "🥗 Veg Meal Day", "points": 3},
-        {"name": "💡 Lights Off Hour", "points": 1}
-    ]
-    
+    st.subheader("📊 Your Results")
     cols = st.columns(3)
-    for idx, challenge in enumerate(challenges):
-        with cols[idx]:
-            if st.button(f"{challenge['name']} (+{challenge['points']})"):
-                st.session_state.score += challenge['points']
-                play_sound("level_up")
-                st.balloons()
-                st.toast(f"🎉 +{challenge['points']} Points!")
+    with cols[0]:
+        st.metric("Transport", f"{calculate_score(transport, '', '')}/3")
+    with cols[1]:
+        st.metric("Diet", f"{calculate_score('', diet, '')}/3")
+    with cols[2]:
+        st.metric("Energy", f"{calculate_score('', '', energy)}/3")
+    
+    st.progress(progress_value)
+    st.subheader(f"🏆 Total Eco Score: {current_score}/{MAX_SCORE}")
+    
+    # --- Visual Feedback ---
+    if current_score >= 7:
+        st.success("🌟 Eco Champion! Keep up the great work!")
+        play_sound("success")
+    elif current_score >= 4:
+        st.warning("🔄 Good start! Try our challenges below to improve")
+    else:
+        st.error("🌱 Room for growth - check our eco tips!")
 
-# --- Run App ---
+# ... (keep rest of the code same) ...
+
 if __name__ == "__main__":
     main()
