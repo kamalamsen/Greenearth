@@ -1,3 +1,8 @@
-streamlit
-pandas
-openpyxl
+streamlit>=1.22
+transformers>=4.28
+torch>=2.0
+pandas>=1.5
+tokenizers>=0.13
+huggingface-hub>=0.11
+setuptools>=65.5
+wheel>=0.38
