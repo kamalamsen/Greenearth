@@ -9,13 +9,28 @@ import asyncio
 # 1. Simple Language | 2. Voice Rewards | 3. Score Boosts | 4. Clear Captions
 
 # --- Audio Reward System ---
+from huggingface_hub import hf_hub_download
+import base64
+
 def play_sound(sound_type: str):
-    """Play achievement sounds with clear captions"""
-    sounds = {
-        "success": "audio/success.mp3",
-        "levelup": "audio/level_up.mp3",
-        "cheer": "audio/crowd_cheer.mp3"
-    }
+    """Play audio from Hugging Face repo"""
+    try:
+        audio_file = hf_hub_download(
+            repo_id="senkamalam/reward", 
+            filename=f"{sound_type}.mp3",
+            repo_type="space"
+        )
+        with open(audio_file, "rb") as f:
+            data = f.read()
+            b64 = base64.b64encode(data).decode()
+            html = f"""
+            <audio controls autoplay style="display:none">
+                <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+            </audio>
+            """
+            st.markdown(html, unsafe_allow_html=True)
+    except Exception as e:
+        st.warning(f"Sound system unavailable: {str(e)}")
     try:
         with open(sounds[sound_type], "rb") as f:
             data = f.read()
