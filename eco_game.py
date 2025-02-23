@@ -1,127 +1,144 @@
 import streamlit as st
 import pandas as pd
 from transformers import pipeline
-from huggingface_hub import hf_hub_download
 import base64
+import platform
+import asyncio
 
-# --- Constants ---
-MAX_SCORE = 12  # Update based on your scoring system
-HF_REPO = "senkamalam/reward"
-AUDIO_FILES = ["success.mp3", "level_up.mp3"]
+# --- Core Improvements ---
+# 1. Simple Language | 2. Voice Rewards | 3. Score Boosts | 4. Clear Captions
 
-# --- Error-Proof Audio System ---
-def play_reward(sound_type: str):
-    """Safely play audio rewards with fallbacks"""
+# --- Audio Reward System ---
+def play_sound(sound_type: str):
+    """Play achievement sounds with clear captions"""
+    sounds = {
+        "success": "audio/success.mp3",
+        "levelup": "audio/level_up.mp3",
+        "cheer": "audio/crowd_cheer.mp3"
+    }
     try:
-        audio_file = hf_hub_download(
-            repo_id=HF_REPO,
-            filename=f"{sound_type}.mp3",
-            repo_type="space",
-            revision="main"
-        )
-        audio_html = f"""
-        <audio controls autoplay style="display:none">
-            <source src="data:audio/mp3;base64,{base64.b64encode(open(audio_file, "rb").read()).decode()}">
-        </audio>
+        with open(sounds[sound_type], "rb") as f:
+            data = f.read()
+            b64 = base64.b64encode(data).decode()
+            html = f"""
+                <audio autoplay>
+                    <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+                </audio>
+            """
+            st.markdown(html, unsafe_allow_html=True)
+            st.caption(f"🎉 Achievement unlocked!")  # Visual caption
+    except:
+        st.warning("Couldn't play reward sound")
+
+# --- Simplified AI Feedback ---
+@st.cache_resource
+def get_eco_tips(_transport, _diet, _energy):
+    """Generate easy-to-understand tips with score boost info"""
+    try:
+        generator = pipeline("text-generation", model="gpt2")
+        prompt = f"""Create 3 simple eco-tips for someone who:
+        - Travels by {_transport}
+        - Eats meat {_diet}
+        - Uses {_energy} energy
+        
+        Format each tip:
+        🌿 [Action] (+[Points] points)
+        💡 Example: "Take bus instead of car (+2 points)"
         """
-        st.components.v1.html(audio_html)
-    except Exception as e:
-        st.button("🎧 Play Sound", 
-                help=f"Click to hear reward | Error: {str(e)}")
-
-# --- Safe Score Calculation ---
-def calculate_score(transport, diet, energy):
-    """Validate and calculate score with error handling"""
-    try:
-        transport_scores = {
-            "Car (Alone)": 4, 
-            "Car (Carpool)": 3,
-            "Public Transport": 2,
-            "Bike/Walk": 1
-        }
-        diet_scores = {
-            "Daily": 4,
-            "3-4 times/week": 3,
-            "1-2 times/week": 2,
-            "Vegetarian/Vegan": 1
-        }
-        energy_scores = {
-            "Non-Renewable (Grid)": 3,
-            "Mixed Renewable": 2,
-            "Solar/Wind": 1
-        }
         
-        return (
-            transport_scores[transport] +
-            diet_scores[diet] +
-            energy_scores[energy]
-        )
-    except KeyError as e:
-        st.error(f"Missing score value for: {str(e)}")
-        return 0
-    except Exception as e:
-        st.error(f"Score calculation failed: {str(e)}")
-        return 0
+        response = generator(prompt, max_length=250)[0]['generated_text']
+        return response.split("Example:")[-1].strip().replace("- ", "\n\n")
+    except:
+        return None
 
-# --- Main App ---
-def main():
-    st.title("🌍 EcoGuardian Pro")
-    st.markdown("### Track & Improve Your Environmental Impact")
+# --- Score Boost System ---
+ECO_CHALLENGES = [
+    {"icon": "🚌", "task": "Use public transport", "points": 2},
+    {"icon": "🥗", "task": "Vegetarian meal day", "points": 3},
+    {"icon": "💡", "task": "1hr less electricity", "points": 1}
+]
+
+# --- Main App Interface ---
+st.title("🌱 EcoFriend")
+st.markdown("### Simple steps to help our planet!")
+
+# --- User Input Section ---
+with st.expander("📝 Tell me about your habits", expanded=True):
+    transport = st.selectbox(
+        "How do you usually travel?",
+        ["Car", "Bus/Train", "Bike/Walk"],
+        help="Transportation makes ~30% of carbon emissions"
+    )
     
-    # --- Questionnaire ---
-    with st.form("habits_form"):
-        transport = st.selectbox(
-            "🚗 Main Transportation:",
-            ["Car (Alone)", "Car (Carpool)", "Public Transport", "Bike/Walk"]
-        )
-        
-        diet = st.selectbox(
-            "🍖 Meat Consumption:",
-            ["Daily", "3-4 times/week", "1-2 times/week", "Vegetarian/Vegan"]
-        )
-        
-        energy = st.selectbox(
-            "💡 Energy Source:",
-            ["Non-Renewable (Grid)", "Mixed Renewable", "Solar/Wind"]
-        )
-        
-        if st.form_submit_button("Calculate My Impact"):
-            try:
-                # --- Calculate & Validate Score ---
-                score = calculate_score(transport, diet, energy)
-                progress_value = max(0.0, min(float(score)/MAX_SCORE, 1.0))
-                
-                # --- Display Results ---
-                st.header("📊 Your Impact Report")
-                cols = st.columns(3)
-                cols[0].metric("Transport", transport_scores[transport])
-                cols[1].metric("Diet", diet_scores[diet])
-                cols[2].metric("Energy", energy_scores[energy])
-                
-                st.progress(progress_value)
-                st.subheader(f"🌱 Sustainability Score: {score}/{MAX_SCORE}")
-                
-                # --- Rewards & Feedback ---
-                if score >= 9:
-                    play_reward("level_up")
-                    st.balloons()
-                    st.success("🌟 Earth Champion Level!")
-                else:
-                    play_reward("success")
-                    st.info("💡 Let's improve together!")
-                
-                # --- AI Recommendations ---
-                try:
-                    generator = pipeline("text-generation", model="gpt2")
-                    prompt = f"Give 3 simple sustainability tips for someone using {transport}, eating {diet}, with {energy} energy:"
-                    tips = generator(prompt, max_length=200)[0]['generated_text']
-                    st.markdown(f"**Recommended Actions:**\n\n{tips.split(':')[-1]}")
-                except Exception as e:
-                    st.warning(f"AI suggestions unavailable: {str(e)}")
-                    
-            except Exception as e:
-                st.error(f"App error: {str(e)}")
+    diet = st.select_slider(
+        "How often do you eat meat?",
+        options=["Daily", "Weekly", "Sometimes", "Never"],
+        value="Daily"
+    )
+    
+    energy = st.radio(
+        "Home energy type:",
+        ["Regular Power", "Some Green Energy", "All Renewable"],
+        index=0
+    )
+
+# --- Calculate Base Score ---
+score = 0  # Add your scoring logic here
+
+# --- AI Tips Section ---
+st.header("💡 Your Personal Eco Plan")
+if st.button("Get Custom Tips", help="Get easy ways to improve"):
+    tips = get_eco_tips(transport, diet, energy)
+    if tips:
+        st.success("Here's your simple action plan:")
+        st.markdown(tips)
+        play_sound("success")
+        st.caption("Complete these to boost your score!") 
+    else:
+        st.info("Tips coming soon! Try the challenges below")
+
+# --- Daily Challenges ---
+st.header("🎯 Daily Quick Wins")
+cols = st.columns(3)
+for idx, challenge in enumerate(ECO_CHALLENGES):
+    with cols[idx]:
+        if st.button(f"{challenge['icon']} {challenge['task']}"):
+            score += challenge['points']
+            st.session_state.score = score
+            st.balloons()
+            play_sound("cheer")
+            st.toast(f"+{challenge['points']} points! Great job!")
+
+# --- Progress Tracking ---
+st.header("📈 Your Progress")
+if 'score' not in st.session_state:
+    st.session_state.score = 0
+
+st.subheader(f"Current Score: {st.session_state.score}")
+st.progress(st.session_state.score/30)  # Adjust max score
+
+# --- Level System ---
+if st.session_state.score >= 20:
+    st.success("🌟 Earth Hero Level!")
+    play_sound("levelup")
+elif st.session_state.score >= 10:
+    st.warning("🌿 Green Learner Level")
+
+# --- How It Works ---
+with st.expander("❓ Understanding Your Score"):
+    st.markdown("""
+    - **Goal**: Lower score = Better for Earth 🌍
+    - **Improve by**:
+      - Using green transport (+2 points)
+      - Eating plant-based meals (+3 points)
+      - Conserving energy (+1 point)
+    - Earn badges at 10/20/50 points!
+    """)
 
 # --- Run App ---
 if __name__ == "__main__":
-    main()
+    import sys
+    if platform.system() == "Windows":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    if '--server.fileWatcherType' not in sys.argv:
+        sys.argv += ['--server.fileWatcherType', 'none']
