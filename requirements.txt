@@ -4,3 +4,7 @@ torch==2.2.1 --extra-index-url https://download.pytorch.org/whl/cpu
 pandas==2.2.1
 huggingface-hub>=0.19.3,<1.0
 protobuf==3.20.3
+streamlit
+pandas
+transformers
+torch
